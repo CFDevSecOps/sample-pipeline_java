@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: javademo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: javademo
+  template:
+    metadata:
+      labels:
+        app: javademo
+    spec:
+      containers:
+      - name: javademo
+        image: appimages
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+      nodeSelector:
+        kubernetes.io/os: linux
+      imagePullSecrets:
+        - name: secret-jfrog
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: javademo
+spec:
+  type:
+    LoadBalancer
+  selector:
+    app: javademo
+  ports:
+  - port: 80
+    targetPort: 8080
+

@@ -1,0 +1,40 @@
+$witType="task"
+
+$token = "xj65x2wtkhvor2o3hmlrm64qudxodydqvfugic6bszbtaqjxqazq"
+
+$url="$(SYSTEM.TEAMFOUNDATIONCOLLECTIONURI)/$(SYSTEM.TEAMPROJECT)/_apis/wit/workitems/`$$($witType)?api-version=6.0"
+
+$token = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes(":$($token)"))
+
+  $body="[
+          {
+            `"op`": `"add`",
+            `"path`": `"/fields/System.Title`",
+            `"value`": `"titlename`"
+          },
+          {
+            `"op`": `"add`",
+            `"path`": `"/fields/System.AssignedTo`",
+            `"value`": `"e-mail address`"
+          },
+
+          {
+            `"op`": `"add`",
+            `"path`": `"/fields/Microsoft.VSTS.Common.Priority`",
+            `"value`": `"4`"
+          },
+          {
+            `"op`": `"add`",
+            `"path`": `"/fields/System.Tags`",
+            `"value`": `"Tag1; Tag2`"
+          },
+          {
+            `"op`": `"add`",
+            `"path`": `"/fields/System.History`",
+            `"value`": `"<div>$(SYSTEM.STAGEDISPLAYNAME)</div>`"
+          }
+
+       ]"
+
+
+$response = Invoke-RestMethod -Uri $url -Headers @{Authorization = "Basic $token"} -Method Post -Body $body -ContentType application/json-patch+json

@@ -1,0 +1,64 @@
+variables:
+- name: tag
+  value: $(Build.BuildId)
+- name: imageName
+  value: java/image
+- name: vmImage
+  value: ubuntu-latest
+#sonar_values---------------------------------
+- name: sonar_connection
+  value: Sonarinstance
+- name: projectKey
+  value: javaproject
+#javatoolInstaller----------------------------
+- name: version
+  value: 11
+#javaProjectBuild-----------------------------
+- name: Buildfile
+  value: pom.xml
+- name: testResultsFiles
+  value: '**/surefire-reports/TEST-*.xml'
+#SNYK_SCAN-----------------------------------
+- name: snyk_service_connection
+  value: 'snyk'
+- name: snyk_target_file
+  value: 'pom.xml'
+#AQUA_ENTERPRISE_IMAGE_REGISTRY_LOGIN--------
+- name: aqua_enterprise_scanner_login
+  value: 'aqua login'
+#docker_build--------------------------------
+- name: docker_build_conn
+  value: 'JFROG_BUILD'
+- name: docker_repo
+  value: 'java/image'
+#AQUA_TRIVY----------------------------------
+- name: aqua_severity
+  value: CRITICAL
+- name: aqua_trivy_image
+  value: demo1609.jfrog.io/$(imageName):$(tag)
+#AQUA_ENTERPRISE_CONN------------------------
+- name: aqua_image
+  value: 'demo1609.jfrog.io/$(imageName):$(tag)'
+- name: aqua_scanner_name
+  value: 'registry.aquasec.com/scanner-cli:6.5'
+- name: aqua_runOptions
+  value: '-e AQUA_TOKEN=edeba68e89fe975fec5ea66f65a427bdcebc3e36'
+- name: aqua_enterprise_conn
+  value: 'aqua connection'
+- name: customFlags
+  value: '--direct-cc'
+#JFrog_artifactory---------------------------
+- name: jfrog_command
+  value: 'push'
+- name: jfrog_conn
+  value: 'JFROG_PUSH'
+- name: jfrog_target_repo
+  value: 'java'
+- name: JFROGimageName
+  value: 'demo1609.jfrog.io/java/image:$(tag)'
+#HELM_update
+- name: temp_helm_name
+  value: javademo-aks-acr-tmp.yml
+- name: helm_name
+  value: javademo-aks-acr.yml
+#END-------------END-----------END---------END

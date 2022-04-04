@@ -1,0 +1,142 @@
+trigger:
+- main
+variables:
+- template: java_config.yml
+jobs:
+- job: A1
+  pool:
+    vmImage: ${{ variables.vmImage }}
+  steps:
+
+    - task: SonarQubePrepare@5
+      inputs:
+        SonarQube: ${{ variables.sonar_connection }}
+        scannerMode: 'Other'
+        extraProperties: |
+          # Additional properties that will be passed to the scanner,
+          # Put one key=value per line, example:
+          # sonar.exclusions=**/*.bin
+          sonar.projectKey=${{ variables.projectKey }}
+    - task: JavaToolInstaller@0
+      inputs:
+        versionSpec: ${{ variables.version }}
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'      
+    - task: Maven@3
+      inputs:
+        mavenPomFile: ${{ variables.Buildfile }}
+        publishJUnitResults: true
+        testResultsFiles: ${{ variables.testResultsFiles }}
+        javaHomeOption: 'JDKVersion'
+        jdkVersionOption: '1.11'
+        mavenVersionOption: 'Default'
+        mavenAuthenticateFeed: true
+        effectivePomSkip: false
+        sonarQubeRunAnalysis: true
+        sqMavenPluginVersionChoice: 'pom'
+        checkStyleRunAnalysis: true
+        pmdRunAnalysis: true
+        findBugsRunAnalysis: true
+    - task: SonarQubePublish@5
+      inputs:
+        pollingTimeoutSec: '300'
+    - task: SnykSecurityScan@1
+      inputs:
+        serviceConnectionEndpoint: ${{ variables.snyk_service_connection }}
+        testType: 'app'
+        targetFile: ${{ variables.snyk_target_file }}
+        severityThreshold: 'critical'
+        monitorWhen: 'always'
+        failOnIssues: true
+    - task: Bash@3
+      displayName: Install aquasecurity/trivy
+      inputs:
+        targetType: 'inline'
+        script: |
+          sudo apt-get install wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy
+    - task: Docker@2
+      inputs:
+        containerRegistry: ${{ variables.aqua_enterprise_scanner_login }}
+        command: 'login'
+    - task: Docker@2
+      inputs:
+        containerRegistry: ${{ variables.docker_build_conn }}
+        repository: ${{ variables.docker_repo }}
+        command: 'build'
+        Dockerfile: '**/Dockerfile'
+        tags: ${{ variables.tag }}
+    - task: Bash@3
+      displayName: Trivy Quality Gate
+      inputs:
+        targetType: 'inline'
+        script: trivy image --exit-code 1 --severity ${{ variables.aqua_severity }} --ignore-unfixed ${{ variables.aqua_trivy_image }}
+    - task: aquasecScanner@4
+      inputs:
+        image: ${{ variables.aqua_image }}
+        scanType: 'local'
+        register: false
+        registry: false
+        hideBase: false
+        showNegligible: false
+        scanner: ${{ variables.aqua_scanner_name }}
+        runOptions: ${{ variables.aqua_runOptions }}
+        connection: ${{ variables.aqua_enterprise_conn }}
+        customFlags: ${{ variables.customFlags }}
+    - task: ArtifactoryDocker@1
+      inputs:
+        command: 'push'
+        artifactoryService: ${{ variables.jfrog_conn }}
+        targetRepo: ${{ variables.jfrog_target_repo }}
+        imageName: ${{ variables.JFROGimageName }}
+      
+    - task: CmdLine@2
+      inputs:
+        script: |
+          sed "s|appimages|${{ variables.JFROGimageName }}|g" $(System.DefaultWorkingDirectory)/${{ variables.helm_name }} > $(System.DefaultWorkingDirectory)/${{ variables.temp_helm_name }}
+          rm $(System.DefaultWorkingDirectory)/${{ variables.helm_name }}
+          mv $(System.DefaultWorkingDirectory)/${{ variables.temp_helm_name }} $(System.DefaultWorkingDirectory)/${{ variables.helm_name }}
+    - task: UsePythonVersion@0
+      inputs:
+        versionSpec: '3.x'
+        addToPath: true
+        architecture: 'x64'
+    - task: CmdLine@2
+      displayName: Checkov
+      inputs:
+       script: |
+        pip3 install checkov
+    
+        checkov -f ${{ variables.helm_name }} -c CKV_K8S_34,CKV_K8S_44,CKV_K8S_45  
+    - task: CreateWorkItem@1
+      displayName: WorkItem Create On Task Fail
+      inputs:
+        teamProject: 'demo'
+        workItemType: 'Issue'
+        title: 'Build failed in $(Build.BuildNumber)'
+        areaPath: 'demo'
+        iterationPath: 'demo'
+        associate: true
+        linkWorkItems: true
+        linkType: 'Microsoft.VSTS.Common.Affects-Reverse'
+        linkTarget: 'associate'
+        addAttachments: true
+        attachments: '**/*.log'
+        createOutputs: true
+        outputVariables: |
+          WorkItemUrl = CWI.WorkItemUrl
+          Description = Description
+      condition: failed() 
+    - task: CopyFiles@2
+      inputs:
+        Contents: ${{ variables.helm_name }}
+        TargetFolder: '$(build.artifactstagingdirectory)'
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(build.artifactstagingdirectory)'
+        ArtifactName: 'drop'
+        publishLocation: 'Container'
+      condition: succeeded()
